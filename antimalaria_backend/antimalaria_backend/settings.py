@@ -230,6 +230,28 @@ LOGGING = {
     },
 }
 
+# Email backend configuration dummy ver 
+# EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+# DEFAULT_FROM_EMAIL = "noreply@example.com"
+
+# Use this configuration for real email sending via SMTP
+# EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+# EMAIL_HOST = "smtp.gmail.com"
+# EMAIL_PORT = 587
+# EMAIL_USE_TLS = True
+
+# EMAIL_HOST_USER = "yourgmail@gmail.com"  
+
+# # pakai App Password Gmail (bukan password biasa)
+# EMAIL_HOST_PASSWORD = "xxxx xxxx xxxx xxxx"  
+
+# DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
+
 MEDIA_URL = '/media/'
 
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+# settings.py
+EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+DEFAULT_FROM_EMAIL = "no-reply@drugxplore.local"
+FRONTEND_URL = "http://localhost:5173"
