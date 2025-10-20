@@ -133,34 +133,41 @@ def predict_batch_ic50(smiles_list, model_name, model_descriptor):
     if featurizer is None:
         raise ValueError("Unsupported model descriptor")
 
-    # 1. Hitung fingerprints
-    with ThreadPoolExecutor() as executor:
-        results = list(executor.map(lambda s: featurizer(s, model=model), smiles_list))
+    results = []
+    for smiles in smiles_list:
+        fp = featurizer(smiles, model=model)
+        if fp is None:
+            results.append({
+                "smiles": smiles,
+                "prediction": None,
+                "status": "invalid"
+            })
+            continue
+        results.append({
+            "smiles": smiles,
+            "features": fp,
+            "status": "valid"
+        })
 
-    fingerprints, valid_smiles, errors = [], [], {}
-    for i, fp in enumerate(results):
-        smiles = smiles_list[i]
-        if fp is not None:
-            fingerprints.append(fp)
-            valid_smiles.append(smiles)
-        else:
-            errors[smiles] = "Invalid SMILES"
+    valid_entries = [r for r in results if r["status"] == "valid"]
+    if valid_entries:
+        try:
+            fp_array = np.vstack([r["features"] for r in valid_entries])
+            preds = model.predict(fp_array)
+            for r, p in zip(valid_entries, preds):
+                r["prediction"] = float(p)
+        except Exception as e:
+            for r in valid_entries:
+                r["prediction"] = None
+                r["status"] = f"error: {e}"
+    else:
+        return {
+            "error": "No valid SMILES provided",
+            "results": results
+        }
 
-    if not fingerprints:
-        return {"error": "No valid SMILES", "details": errors}
+    # buang fitur dari hasil akhir biar response bersih
+    for r in results:
+        r.pop("features", None)
 
-    # 2. Buat array
-    fp_array = np.vstack(fingerprints)  # <- pakai ini
-
-    # 3. Prediksi
-    try:
-        predictions = model.predict(fp_array)
-    except Exception as e:
-        return {"error": str(e)}
-
-
-    results_map = {smiles: float(pred) for smiles, pred in zip(valid_smiles, predictions)}
-    results_map.update(errors)
-    final_results = [results_map.get(s, None) for s in smiles_list] 
-
-    return final_results
+    return {"results": results}

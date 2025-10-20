@@ -77,3 +77,15 @@ class PredictionCompound(models.Model):
 
     def __str__(self):
         return f"Result for {self.compound.iupac_name} in Job {self.prediction.id}"
+    
+class LiteratureCompound(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    compound = models.ForeignKey(Compound, related_name='literature_data', on_delete=models.CASCADE)
+    
+    ic50 = models.FloatField(null=True, blank=True)
+    ic50val = models.FloatField(null=True, blank=True)
+    lelp = models.FloatField(null=True, blank=True)
+    category = models.CharField(max_length=100, null=True, blank=True)
+
+    def __str__(self):
+        return f"Literature data for {self.compound.iupac_name}"

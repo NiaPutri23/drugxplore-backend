@@ -66,228 +66,252 @@ class PredictionViewSet(viewsets.ModelViewSet):
             "message": "Prediction deleted successfully."
         }, status=status.HTTP_204_NO_CONTENT)
 
+
 class PredictIC50View(APIView):
     permission_classes = [IsAuthenticated]
 
-    @extend_schema(**predict_ic50_schema)
+    @extend_schema(
+        summary="Predict IC50 values for SMILES",
+        description="Predict IC50 for valid SMILES and mark invalid ones as NaN, but still store them in DB.",
+    )
     def post(self, request, *args, **kwargs):
         user = request.user
-        csv_file = request.FILES.get("file", None)
-        smiles_input = request.data.get("smiles", None)
-        model_descriptor = request.data.get("model_descriptor", None)
-        model_method = request.data.get("model_method", None)
+        csv_file = request.FILES.get("file")
+        smiles_input = request.data.get("smiles")
+        model_descriptor = request.data.get("model_descriptor")
+        model_method = request.data.get("model_method")
 
-        if not all([model_descriptor, model_method]):
+        if not model_descriptor or not model_method:
             return Response(
                 {"error": "model_descriptor and model_method are required."},
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # 🔹 Ambil SMILES dari CSV atau teks
+        smiles_list = []
         if csv_file:
             if not csv_file.name.endswith(".csv"):
-                return Response({"error": "Only CSV files are supported."}, status=status.HTTP_400_BAD_REQUEST)
+                return Response(
+                    {"error": "Only CSV files are supported."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             try:
                 decoded_file = csv_file.read().decode("utf-8-sig")
-                io_string = io.StringIO(decoded_file)
-                reader = csv.reader(io_string)
+                reader = csv.reader(io.StringIO(decoded_file))
                 smiles_list = [row[0].strip() for row in reader if row and row[0].strip()]
             except Exception as e:
-                return Response({"error": f"Failed to parse CSV: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
-
+                return Response({"error": f"Failed to parse CSV: {e}"}, status=400)
         elif smiles_input:
             if isinstance(smiles_input, str):
                 smiles_list = [s.strip() for s in smiles_input.split(",") if s.strip()]
             elif isinstance(smiles_input, list):
-                smiles_list = [s.strip() for s in smiles_input if isinstance(s, str) and s.strip()]
-            else:
-                return Response({"error": "SMILES input must be a comma-separated string or a list of strings."}, status=status.HTTP_400_BAD_REQUEST)
+                smiles_list = [s.strip() for s in smiles_input if isinstance(s, str)]
         else:
-            return Response({"error": "Provide either a 'smiles' field or a 'file' (CSV)."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "Provide either 'smiles' or 'file' (CSV)."},
+                status=400,
+            )
 
-        seen = set()
-        smiles_list = [s for s in smiles_list if not (s in seen or seen.add(s))]
+        # 🔹 Hapus duplikat
+        smiles_list = list(dict.fromkeys(smiles_list))
 
         if not smiles_list:
-            return Response({"error": "No valid SMILES strings provided."}, status=status.HTTP_400_BAD_REQUEST)
-        
+            return Response({"error": "No valid SMILES provided."}, status=400)
+
+        # 🔹 Pisahkan valid dan invalid SMILES
+        valid_smiles, invalid_smiles = [], []
+        for s in smiles_list:
+            mol = Chem.MolFromSmiles(s)
+            if mol:
+                valid_smiles.append(s)
+            else:
+                invalid_smiles.append(s)
+
+        predictions_dict = {s: None for s in smiles_list}
+        ml_model = get_object_or_404(
+            MLModel, descriptor=model_descriptor, method=model_method, is_active=True
+        )
+
         try:
-            ml_predict_url = "http://localhost:8080/api/v1/predict/"
-            response = requests.post(ml_predict_url, json={
-                "smiles": smiles_list,
-                "model_method": model_method,
-                "model_descriptor": model_descriptor,
-                "input_source_type": "csv" if csv_file else "text",
-            })
+            # 🔹 Prediksi hanya untuk valid SMILES
+            if valid_smiles:
+                response = requests.post(
+                    "http://localhost:8080/api/v1/predict/",
+                    json={
+                        "smiles": valid_smiles,
+                        "model_method": model_method,
+                        "model_descriptor": model_descriptor,
+                    },
+                )
 
-            if response.status_code != 200:
-                return Response({"error": "ML prediction API error.", "details": response.json().get("detail")}, status=status.HTTP_400_BAD_REQUEST)
+                if response.status_code != 200:
+                    return Response(
+                        {"error": "ML API error", "details": response.text}, status=400
+                    )
 
-            predictions = response.json()
-            if "error" in predictions:
-                return Response(predictions, status=status.HTTP_400_BAD_REQUEST)
+                predictions_response = response.json()
 
-            if not predictions:
-                return Response({"error": "No predictions returned from ML API."}, status=status.HTTP_400_BAD_REQUEST)
+                # Kalau ML API pakai format {"results": [...]}
+                if "results" in predictions_response:
+                    predictions = predictions_response["results"]
+                else:
+                    predictions = predictions_response  # fallback kalau format lama
 
-            ml_model = get_object_or_404(MLModel, descriptor=model_descriptor, method=model_method, is_active=True)
+                for item in predictions:
+                    smiles = item.get("smiles")
+                    pred_value = item.get("prediction")
+                    predictions_dict[smiles] = pred_value
+
+            # 🔹 Buat objek Prediction utama
             prediction = Prediction.objects.create(
                 user=user,
                 ml_model=ml_model,
                 input_source_type="csv" if csv_file else "text",
-                completed_at=timezone.now()
+                completed_at=timezone.now(),
             )
 
-            compounds_to_fetch = []
-            results = []
-            smiles_set = set(smiles_list)
-            existing_compounds = Compound.objects.filter(smiles__in=smiles_set)
-            compound_map = {c.smiles: c for c in existing_compounds}
+            # 🔹 Ambil compound dari DB (untuk yang valid)
+            existing = Compound.objects.filter(smiles__in=valid_smiles)
+            compound_map = {c.smiles: c for c in existing}
+            compounds_to_fetch = [s for s in valid_smiles if s not in compound_map]
 
-            for smiles, ic50 in zip(smiles_list, predictions):
-                compound = compound_map.get(smiles)
-                if compound:
-                    results.append((smiles, ic50, compound))
-                else:
-                    compounds_to_fetch.append((smiles, ic50))
-
-            fetched_compounds = {}
+            # 🔹 Fetch compound baru dari PubChem
+            fetched = {}
             if compounds_to_fetch:
                 with ThreadPoolExecutor() as executor:
-                    future_to_smiles = {
-                        executor.submit(self.fetch_pubchem_data, smiles): (smiles, ic50)
-                        for smiles, ic50 in compounds_to_fetch
+                    futures = {
+                        executor.submit(self.fetch_pubchem_data, s): s
+                        for s in compounds_to_fetch
                     }
-                    for future in as_completed(future_to_smiles):
-                        smiles, ic50 = future_to_smiles[future]
+                    for future in as_completed(futures):
+                        s = futures[future]
                         try:
-                            fetch_data = future.result()
-                            compound = Compound.objects.create(smiles=smiles, **fetch_data)
-                            fetched_compounds[smiles] = (ic50, compound)
+                            data = future.result()
+                            fetched[s] = Compound.objects.create(smiles=s, **data)
                         except Exception as e:
-                            fetched_compounds[smiles] = (ic50, None)
+                            print(f"⚠️ PubChem fetch failed for {s}: {e}")
+                            fetched[s] = None
 
+            all_compounds = {**compound_map, **fetched}
+
+            # 🔹 Siapkan list untuk bulk_create
+            to_create = []
             response_data = []
-            prediction_compounds = []
 
-            with ThreadPoolExecutor() as executor:
-                futures = [
-                    executor.submit(self.process_prediction, smiles, ic50, compound_map.get(smiles), prediction)
-                    for smiles, ic50 in zip(smiles_list, predictions)
-                ]
-                for future in as_completed(futures):
-                    response_item, pred_comp = future.result()
-                    response_data.append(response_item)
-                    if pred_comp:
-                        prediction_compounds.append(pred_comp)
-            PredictionCompound.objects.bulk_create(prediction_compounds)
+            for smiles in smiles_list:
+                ic50 = predictions_dict.get(smiles)
+                mol = Chem.MolFromSmiles(smiles)
+                compound = all_compounds.get(smiles) if smiles in valid_smiles else None
+
+                if mol and ic50 is not None:
+                    # Hitung LELP dan kategori
+                    heavy_atoms = mol.GetNumHeavyAtoms()
+                    clogP = Crippen.MolLogP(mol)
+                    le = (1.37 * ic50) / heavy_atoms if heavy_atoms else None
+                    lelp = clogP / le if le else None
+                    category = (
+                        # "very strong" if ic50 > 6 else
+                        # "strong" if ic50 > 4.7 else
+                        # "moderate" if ic50 > 4 else
+                        # "weak" if ic50 > 3.7 else
+                        # "inactive"
+                        "not recommended" if lelp > 20 else
+                        "moderate" if lelp >= 10 else
+                        "recommended" 
+                    )
+                else:
+                    ic50 = None
+                    lelp = None
+                    category = None
+
+                # 🔹 Simpan semuanya, termasuk invalid
+                pred_comp = PredictionCompound(
+                    prediction=prediction,
+                    compound=compound,
+                    ic50=ic50,
+                    lelp=lelp,
+                    category=category,
+                )
+                to_create.append(pred_comp)
+
+                response_data.append({
+                    "smiles": smiles,
+                    "pic50": ic50,
+                    "lelp": lelp,
+                    "category": category,
+                    "compound": {
+                        "id": compound.id if compound else None,
+                        "smiles": smiles,
+                        "iupac_name": getattr(compound, "iupac_name", None),
+                        "cid": getattr(compound, "cid", None),
+                        "description": getattr(compound, "description", None),
+                        "molecular_formula": getattr(compound, "molecular_formula", None),
+                        "molecular_weight": getattr(compound, "molecular_weight", None),
+                        "synonyms": getattr(compound, "synonyms", None),
+                        "inchi": getattr(compound, "inchi", None),
+                        "inchikey": getattr(compound, "inchikey", None),
+                        "structure_image": getattr(compound, "structure_image", None),
+                    } if compound else None,
+                })
+
+            # 🔹 Simpan semua hasil ke DB
+            PredictionCompound.objects.bulk_create(to_create)
 
             return Response({
                 "status": "success",
-                "message": f"Prediction complete and saved for {len(response_data)} SMILES.",
-                "data": response_data
-            }, status=status.HTTP_200_OK)
+                "message": "Prediction completed.",
+                "valid_count": len(valid_smiles),
+                "invalid_count": len(invalid_smiles),
+                "invalid_smiles": invalid_smiles,
+                "data": response_data,
+            }, status=200)
 
-        except ValueError as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({"error": str(e)}, status=400)
 
-    def process_prediction(self, smiles, ic50, compound, prediction):
-        if ic50 > 6:
-            category = "very strong"
-        elif 5 < ic50 <= 6:
-            category = "strong"
-        elif 4 < ic50 <= 5:
-            category = "moderate"
-        elif 3 < ic50 <= 4:
-            category = "weak"
-        else:
-            category = "inactive"
-
-        mol = Chem.MolFromSmiles(smiles)
-        if mol:
-            heavy_atoms = mol.GetNumHeavyAtoms()
-            clogP = Crippen.MolLogP(mol)
-        else:
-            heavy_atoms, clogP = None, None
-
-        le = (1.37 * ic50) / heavy_atoms if heavy_atoms and clogP else None
-        lelp = clogP / le if le else None
-
-        prediction_compound = None
-        if compound:
-            prediction_compound = PredictionCompound(
-                compound=compound,
-                ic50=ic50,
-                category=category,
-                prediction=prediction
-            )
-
-        response_item = {
-            "smiles": smiles,
-            "pic50": ic50,
-            "lelp": lelp,
-            "category": category,
-            "compound": {
-                "id": compound.id if compound else None,
-                "smiles": compound.smiles if compound else smiles,
-                "iupac_name": getattr(compound, "iupac_name", None),
-                "cid": getattr(compound, "cid", None),
-                "description": getattr(compound, "description", None),
-                "molecular_formula": getattr(compound, "molecular_formula", None),
-                "molecular_weight": getattr(compound, "molecular_weight", None),
-                "synonyms": getattr(compound, "synonyms", None),
-                "inchi": getattr(compound, "inchi", None),
-                "inchikey": getattr(compound, "inchikey", None),
-                "structure_image": getattr(compound, "structure_image", None)
-            }
-        }
-
-        return response_item, prediction_compound
 
     def fetch_pubchem_data(self, smiles):
+        """Ambil data compound dari PubChem."""
         data = {
             "cid": None, "molecular_formula": None, "molecular_weight": None,
-            "iupac_name": None, "inchi": None, "inchikey": None, "description": None,
-            "synonyms": None, "structure_image": None
+            "iupac_name": None, "inchi": None, "inchikey": None,
+            "description": None, "synonyms": None, "structure_image": None,
         }
-
         try:
-            compounds = pcp.get_compounds(smiles, 'smiles')
+            compounds = pcp.get_compounds(smiles, "smiles")
             if compounds:
-                compound = compounds[0]
+                c = compounds[0]
                 data.update({
-                    "cid": compound.cid,
-                    "molecular_formula": compound.molecular_formula,
-                    "molecular_weight": compound.molecular_weight,
-                    "iupac_name": compound.iupac_name,
-                    "inchi": compound.inchi,
-                    "inchikey": compound.inchikey,
-                    "synonyms": ", ".join(compound.synonyms) if compound.synonyms else None,
-                    "structure_image": f"https://pubchem.ncbi.nlm.nih.gov/image/imgsrv.fcgi?cid={compound.cid}&t=l" if compound.cid else None,
+                    "cid": c.cid,
+                    "molecular_formula": c.molecular_formula,
+                    "molecular_weight": c.molecular_weight,
+                    "iupac_name": c.iupac_name,
+                    "inchi": c.inchi,
+                    "inchikey": c.inchikey,
+                    "synonyms": ", ".join(c.synonyms) if c.synonyms else None,
+                    "structure_image": f"https://pubchem.ncbi.nlm.nih.gov/image/imgsrv.fcgi?cid={c.cid}&t=l" if c.cid else None,
                 })
-
-                if compound.cid:
-                    description = self.fetch_pubchem_description(compound.cid)
-                    if description:
-                        data["description"] = description
-                        
+                desc = self.fetch_pubchem_description(c.cid)
+                if desc:
+                    data["description"] = desc
         except Exception as e:
-            print(f"Error fetching data from PubChem: {e}")
+            print(f"⚠️ PubChem fetch error for {smiles}: {e}")
         return data
 
     def fetch_pubchem_description(self, cid):
-        url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/{cid}/description/JSON"
         try:
-            response = requests.get(url, timeout=5)
-            if response.status_code == 200:
-                json_data = response.json()
-                descriptions = json_data.get("InformationList", {}).get("Information", [])
-                for item in descriptions:
-                    if "Description" in item:
-                        return item["Description"]
-        except requests.RequestException as e:
-            print(f"Error fetching description from PubChem: {e}")
+            res = requests.get(
+                f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/{cid}/description/JSON",
+                timeout=5,
+            )
+            if res.status_code == 200:
+                info = res.json().get("InformationList", {}).get("Information", [])
+                for i in info:
+                    if "Description" in i:
+                        return i["Description"]
+        except Exception:
+            pass
         return None
-
 
 @extend_schema(**prediction_download_schema)
 class PredictionDownloadView(APIView):

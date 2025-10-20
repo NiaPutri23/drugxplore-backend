@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from api.models import Compound, Prediction, PredictionCompound, MLModel
+from api.models import Compound, Prediction, PredictionCompound, MLModel, LiteratureCompound
 
 class MLModelSerializer(serializers.ModelSerializer):
     class Meta:
@@ -29,5 +29,14 @@ class PredictionCompoundSerializer(serializers.ModelSerializer):
     class Meta:
         model = PredictionCompound
         fields = [
-            'id', 'ic50', 'lelp', 'compound', 'prediction'
+            'id', 'ic50', 'lelp', 'category', 'compound', 'prediction'
+        ]
+
+class LiteratureCompoundSerializer(serializers.ModelSerializer):
+    compound = CompoundSerializer(read_only=True)
+
+    class Meta:
+        model = LiteratureCompound
+        fields = [
+            'id', 'compound', 'ic50', 'ic50val', 'lelp', 'category',
         ]

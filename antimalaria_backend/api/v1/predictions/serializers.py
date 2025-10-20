@@ -22,7 +22,7 @@ class PredictionCompoundSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = PredictionCompound
-        fields = ['id', 'ic50', 'lelp', 'compound']
+        fields = ['id', 'category', 'ic50', 'lelp', 'compound']
 
 class PredictionSerializer(serializers.ModelSerializer):
     prediction_compounds = PredictionCompoundSerializer(many=True, read_only=True)
