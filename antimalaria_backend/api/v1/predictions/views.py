@@ -1,6 +1,7 @@
 from django.http import HttpResponse
 from rest_framework import status, viewsets
 from rest_framework.views import APIView
+from rest_framework.decorators import action
 import csv
 import io
 from django.shortcuts import get_object_or_404
@@ -65,7 +66,21 @@ class PredictionViewSet(viewsets.ModelViewSet):
             "status": "success",
             "message": "Prediction deleted successfully."
         }, status=status.HTTP_204_NO_CONTENT)
+    
+    
+    @action(detail=False, methods=["delete"], url_path="delete-all")
+    def delete_all(self, request):
+        user = request.user
+        qs = Prediction.objects.filter(user=user)
+        count, _ = qs.delete()
 
+        return Response(
+            {
+                "status": "success",
+                "message": f"All your predictions have been deleted ({count} entries)."
+            },
+            status=200
+        )
 
 class PredictIC50View(APIView):
     permission_classes = [IsAuthenticated]

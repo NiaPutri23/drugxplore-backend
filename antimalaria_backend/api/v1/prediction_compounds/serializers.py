@@ -34,9 +34,15 @@ class PredictionCompoundSerializer(serializers.ModelSerializer):
 
 class LiteratureCompoundSerializer(serializers.ModelSerializer):
     compound = CompoundSerializer(read_only=True)
+    compound_id = serializers.PrimaryKeyRelatedField(
+        queryset=Compound.objects.all(),
+        source='compound',
+        write_only=True,
+        required=False
+    )
 
     class Meta:
         model = LiteratureCompound
         fields = [
-            'id', 'compound', 'ic50', 'ic50val', 'lelp', 'category',
+            'id', 'compound', 'compound_id', 'ic50', 'ic50val', 'lelp', 'category',
         ]

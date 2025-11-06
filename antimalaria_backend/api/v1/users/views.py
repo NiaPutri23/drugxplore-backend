@@ -152,17 +152,25 @@ class UserViewSet(viewsets.ModelViewSet):
             "message": "User deleted successfully."
         }, status=status.HTTP_204_NO_CONTENT)
     
-    def partial_update(self, request, *args, **kwargs):
-        user = self.get_object()
-        password = request.data.get("password")
-        password2 = request.data.get("password2")
+def partial_update(self, request, *args, **kwargs):
+    user = self.get_object()
 
+    # 🚧 Batasi akses
+    if request.user.role != 'admin' and user.id != request.user.id:
+        raise PermissionDenied("You do not have permission to update this user.")
+
+    password = request.data.get("password")
+    password2 = request.data.get("password2")
+    username = request.data.get("username")
+
+    # 🔹 Jika ubah password
+    if password or password2:
         if not password or not password2:
             return Response(
                 {"detail": "Both password and password2 are required."},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
+
         if password != password2:
             return Response(
                 {"detail": "Passwords do not match."},
@@ -172,17 +180,36 @@ class UserViewSet(viewsets.ModelViewSet):
         try:
             validate_password(password, user)
         except ValidationError as e:
-            return Response(
-                {"detail": e.messages},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({"detail": e.messages}, status=status.HTTP_400_BAD_REQUEST)
 
         user.set_password(password)
         user.save()
-
         return Response({
             "status": "success",
-            "message": "Password has been changed.",
+            "message": "Password has been changed."
         }, status=status.HTTP_200_OK)
 
-    
+    # 🔹 Jika ubah username
+    if username:
+        # Pastikan username unik
+        if User.objects.filter(username=username).exclude(id=user.id).exists():
+            return Response(
+                {"detail": "This username is already taken."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        user.username = username
+        user.save()
+
+        serializer = self.get_serializer(user)
+        return Response({
+            "status": "success",
+            "message": "Username updated successfully.",
+            "data": serializer.data
+        }, status=status.HTTP_200_OK)
+
+    # 🔹 Tidak ada field valid yang dikirim
+    return Response(
+        {"detail": "No valid fields provided. You can only update username or password."},
+        status=status.HTTP_400_BAD_REQUEST
+    )
