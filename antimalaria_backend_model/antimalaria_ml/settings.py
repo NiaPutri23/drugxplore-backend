@@ -20,7 +20,7 @@ env = environ.Env()
 # --- CORE SECURITY SETTINGS (PRODUCTION READY) ---
 # SECURITY WARNING: keep the secret key used in production secret!
 # Ambil SECRET_KEY dari Environment Variable di Railway
-SECRET_KEY = os.getenv('SECRET_KEY', 'default-insecure-key-for-local-development')
+SECRET_KEY = os.getenv('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 # Ambil DEBUG dari Environment Variable. Default ke False (Production Mode)
