@@ -151,7 +151,8 @@ class PredictIC50View(APIView):
             # 🔹 Prediksi hanya untuk valid SMILES
             if valid_smiles:
                 response = requests.post(
-                    "http://localhost:8080/api/v1/predict/",
+                    # "http://localhost:8080/api/v1/predict/",
+                    "https://backendmodel-production-4a29.up.railway.app/",
                     json={
                         "smiles": valid_smiles,
                         "model_method": model_method,
