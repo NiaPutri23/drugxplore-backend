@@ -24,9 +24,6 @@ from .schemas import (
     predict_ic50_schema,
     prediction_download_schema
 )
-import environ
-env = environ.Env()
-environ.Env.read_env()
 
 @extend_schema_view(
     list=extend_schema(**prediction_list_schema),
@@ -153,7 +150,7 @@ class PredictIC50View(APIView):
             if valid_smiles:
                 response = requests.post(
                     # "http://localhost:8080/api/v1/predict/",
-                    settings.MODEL_API_URL + "/api/v1/predict/",
+                    settings.ML_MODEL_URL + "/api/v1/predict/",
                     json={
                         "smiles": valid_smiles,
                         "model_method": model_method,

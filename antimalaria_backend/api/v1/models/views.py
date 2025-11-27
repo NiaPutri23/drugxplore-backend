@@ -7,9 +7,10 @@ from django.shortcuts import get_object_or_404
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.views import APIView
-import environ
-env = environ.Env()
-environ.Env.read_env()
+from django.conf import settings
+# import environ
+# env = environ.Env()
+# environ.Env.read_env()
 import requests
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from .schemas import model_create_responses, model_list_responses, model_retrieve_responses, model_delete_responses, model_activate_responses
@@ -79,7 +80,7 @@ class MLViewSet(viewsets.ModelViewSet):
         new_version = int(latest_model.version) + 1 if latest_model else 1
 
         model_file = request.FILES.get("file")
-        backend_url = env("ML_MODEL_URL")
+        backend_url = settings.ML_MODEL_URL
 
 
         model_file.seek(0)
@@ -109,7 +110,7 @@ class MLViewSet(viewsets.ModelViewSet):
 
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
-        backend_url = f"{env('ML_MODEL_URL')}{instance.id}/"
+        backend_url = f"{settings.ML_MODEL_URL}{instance.id}/"
 
         response = requests.delete(backend_url)
 

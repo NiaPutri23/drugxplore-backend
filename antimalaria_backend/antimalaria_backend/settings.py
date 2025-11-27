@@ -141,8 +141,6 @@ CORS_ALLOWED_ORIGINS = [
 
 CSRF_TRUSTED_ORIGINS = [
     os.getenv("FRONTEND_URL", "http://localhost:5173"),
-    "http://*.vercel.app",
-    "https://*.railway.app", 
 ]
 
 CORS_ALLOW_CREDENTIALS = True
@@ -259,7 +257,7 @@ EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")
 DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
 
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
-MODEL_API_URL = os.getenv("MODEL_API_URL", "http://localhost:8001")
+ML_MODEL_URL = os.getenv("ML_MODEL_URL", "http://localhost:8001")
 
 MEDIA_URL = '/media/'
 
