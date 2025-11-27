@@ -27,8 +27,8 @@ env = environ.Env()
 
 # SECURITY WARNING: keep the secret key used in production secret!
 # SECRET_KEY = 'django-insecure-85w-p8xml#zbk779xq+trdi)_+g)v7pswe$3@gje^md=wmz6qz'
-SECRET_KEY = os.getenv("SECRET_KEY")
-DEBUG = os.getenv("DEBUG", "False") == "True"
+SECRET_KEY = env("SECRET_KEY")
+DEBUG = env.bool("DEBUG", default=False)
 
 # SECURITY WARNING: don't run with debug turned on in production!
 # DEBUG = "True"
@@ -37,6 +37,8 @@ ALLOWED_HOSTS = ['*']
 
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+
+FRONTEND_URL = env("FRONTEND_URL", "http://localhost:5173")
 
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
@@ -136,24 +138,29 @@ MIDDLEWARE = [
 ]
 
 CORS_ALLOWED_ORIGINS = [
-    os.getenv("FRONTEND_URL", "http://localhost:5173"),
+    FRONTEND_URL, 
+        "http://localhost:5173"
 ]
 
 CSRF_TRUSTED_ORIGINS = [
-    os.getenv("FRONTEND_URL", "http://localhost:5173"),
+    FRONTEND_URL, 
+        "https://*.vercel.app",
+        "http://localhost:5173",
     "https://*.railway.app", 
 ]
 
 CORS_ALLOW_CREDENTIALS = True
 
-CSRF_COOKIE_SAMESITE = 'Lax'
-SESSION_COOKIE_SAMESITE = 'Lax'
-
 # kalo dev
+# CSRF_COOKIE_SAMESITE = 'Lax'
+# SESSION_COOKIE_SAMESITE = 'Lax'
 # CSRF_COOKIE_SECURE = False
 # SESSION_COOKIE_SECURE = False
 
 # kalo prod
+CSRF_COOKIE_SAMESITE = 'None'
+SESSION_COOKIE_SAMESITE = 'None'
+
 CSRF_COOKIE_SECURE = True
 SESSION_COOKIE_SECURE = True
 SESSION_COOKIE_HTTP_ONLY = True
@@ -251,11 +258,11 @@ EMAIL_HOST = "smtp.gmail.com"
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
 
-EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER")
-EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")
+EMAIL_HOST_USER = env("EMAIL_HOST_USER")
+EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD")
 DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
 
-FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
+MODEL_API_URL = env("MODEL_API_URL", "http://localhost:8080")
 
 MEDIA_URL = '/media/'
 
