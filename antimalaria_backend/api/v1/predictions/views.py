@@ -6,6 +6,7 @@ import csv
 import io
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from django.conf import settings
 import pubchempy as pcp
 import requests
 from rdkit import Chem
@@ -152,7 +153,7 @@ class PredictIC50View(APIView):
             if valid_smiles:
                 response = requests.post(
                     # "http://localhost:8080/api/v1/predict/",
-                    "https://backendmodel-production-4a29.up.railway.app/",
+                    settings.MODEL_API_URL + "/api/v1/predict/",
                     json={
                         "smiles": valid_smiles,
                         "model_method": model_method,
