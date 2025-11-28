@@ -145,6 +145,12 @@ CSRF_TRUSTED_ORIGINS = [
 
 CORS_ALLOW_CREDENTIALS = True
 
+CORS_ALLOW_HEADERS = [
+    "content-type",
+    "x-csrftoken",
+    "x-requested-with",
+]
+
 # kalo dev
 # CSRF_COOKIE_SAMESITE = 'Lax'
 # SESSION_COOKIE_SAMESITE = 'Lax'
