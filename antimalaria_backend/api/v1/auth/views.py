@@ -27,9 +27,8 @@ class CSRFTokenView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request, *args, **kwargs):
-        # Memastikan cookie csrftoken diatur
-        get_token(request) 
-        return Response({"detail": "CSRF cookie set."})
+        csrf_token = get_token(request)
+        return Response({"csrfToken": csrf_token})
 
 # Register View
 @extend_schema(
