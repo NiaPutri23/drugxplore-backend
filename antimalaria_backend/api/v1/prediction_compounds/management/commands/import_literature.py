@@ -62,9 +62,9 @@ class Command(BaseCommand):
                             lelp = clogP / le if le else None
                             if lelp is not None:
                                 category = (
-                                    "not recommended" if lelp > 20 else
+                                    "low potential" if lelp > 20 else
                                     "moderate" if lelp >= 10 else
-                                    "recommended"
+                                    "potential"
                                 )
                 except Exception as e:
                     self.stdout.write(self.style.WARNING(f"⚠️ LELP calc failed for {smiles}: {e}"))
