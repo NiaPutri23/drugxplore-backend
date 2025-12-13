@@ -199,9 +199,9 @@ class LiteratureCompoundViewSet(viewsets.ModelViewSet):
                         lelp = clogP / le if le else None
                         if lelp is not None:
                             category = (
-                                "not potential" if lelp > 20 else
+                                "low potential" if lelp > 20 else
                                 "moderate" if lelp >= 10 else
-                                "potential"
+                                "high potential"
                             )
             except Exception as e:
                 print(f"⚠️ LELP calc failed for {smiles}: {e}")

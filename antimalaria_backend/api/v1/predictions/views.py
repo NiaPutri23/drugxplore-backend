@@ -229,9 +229,9 @@ class PredictIC50View(APIView):
                         # "moderate" if ic50 > 4 else
                         # "weak" if ic50 > 3.7 else
                         # "inactive"
-                        "not recommended" if lelp > 20 else
+                        "low potential" if lelp > 20 else
                         "moderate" if lelp >= 10 else
-                        "recommended" 
+                        "high potential" 
                     )
                 else:
                     ic50 = None
