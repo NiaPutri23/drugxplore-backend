@@ -60,12 +60,17 @@ class Command(BaseCommand):
                         if heavy_atoms > 0:
                             le = (1.37 * ic50) / heavy_atoms
                             lelp = clogP / le if le else None
-                            if lelp is not None:
-                                category = (
-                                    "low potential" if lelp > 20 else
-                                    "moderate" if lelp >= 10 else
-                                    "potential"
-                                )
+                            # Determine category based on IC50 (µM) thresholds:
+                            # IC50 ≤ 20 -> high potential, 20 < IC50 ≤ 100 -> moderate, IC50 > 100 -> low potential
+                            if ic50 and ic50 > 0:
+                                if ic50 <= 20:
+                                    category = "high potential"
+                                elif ic50 <= 100:
+                                    category = "moderate"
+                                else:
+                                    category = "low potential"
+                            else:
+                                category = None
                 except Exception as e:
                     self.stdout.write(self.style.WARNING(f"⚠️ LELP calc failed for {smiles}: {e}"))
 
@@ -79,8 +84,9 @@ class Command(BaseCommand):
                 )
 
                 status = "🆕" if created else "🔁"
+                # Include ic50 (µM) and ic50val (pIC50) in the import log
                 self.stdout.write(self.style.SUCCESS(
-                    f"{status} {compound.iupac_name or smiles} | LELP={lelp} | Category={category}"
+                    f"{status} {compound.iupac_name or smiles} | IC50={ic50} µM | IC50val={pic50} | LELP={lelp} | Category={category}"
                 ))
 
         self.stdout.write(self.style.SUCCESS("🎉 Import selesai tanpa hapus Compound!"))

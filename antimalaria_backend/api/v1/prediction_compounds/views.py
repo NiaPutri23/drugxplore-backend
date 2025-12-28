@@ -125,12 +125,14 @@ class LiteratureCompoundViewSet(viewsets.ModelViewSet):
                     if heavy_atoms > 0:
                         le = (1.37 * ic50) / heavy_atoms
                         lelp = clogP / le if le else None
-                        if lelp is not None:
-                            category = (
-                                "low potential" if lelp > 20 else
-                                "moderate" if lelp >= 10 else
-                                "potential"
-                            )
+                        if ic50 is not None:
+                            # IC50 thresholds (µM): ≤20 -> high, 20<IC50≤100 -> moderate, >100 -> low
+                            if ic50 <= 20:
+                                category = "high potential"
+                            elif ic50 <= 100:
+                                category = "moderate"
+                            else:
+                                category = "low potential"
             except Exception as e:
                 print(f"⚠️ LELP calc failed for {smiles}: {e}")
 
@@ -197,12 +199,15 @@ class LiteratureCompoundViewSet(viewsets.ModelViewSet):
                     if heavy_atoms > 0:
                         le = (1.37 * ic50) / heavy_atoms
                         lelp = clogP / le if le else None
-                        if lelp is not None:
-                            category = (
-                                "low potential" if lelp > 20 else
-                                "moderate" if lelp >= 10 else
-                                "high potential"
-                            )
+                        # Determine category based on IC50 (µM) thresholds:
+                        # IC50 ≤ 20 -> high, 20 < IC50 ≤ 100 -> moderate, IC50 > 100 -> low
+                        if ic50 is not None:
+                            if ic50 <= 20:
+                                category = "high potential"
+                            elif ic50 <= 100:
+                                category = "moderate"
+                            else:
+                                category = "low potential"
             except Exception as e:
                 print(f"⚠️ LELP calc failed for {smiles}: {e}")
 
