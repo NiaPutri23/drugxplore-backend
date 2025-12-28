@@ -223,16 +223,25 @@ class PredictIC50View(APIView):
                     clogP = Crippen.MolLogP(mol)
                     le = (1.37 * ic50) / heavy_atoms if heavy_atoms else None
                     lelp = clogP / le if le else None
-                    category = (
-                        # "very strong" if ic50 > 6 else
-                        # "strong" if ic50 > 4.7 else
-                        # "moderate" if ic50 > 4 else
-                        # "weak" if ic50 > 3.7 else
-                        # "inactive"
-                        "low potential" if lelp > 20 else
-                        "moderate" if lelp >= 10 else
-                        "high potential" 
-                    )
+                    # Determine category based on IC50 (µM) thresholds:
+                    # IC50 ≤ 20 -> high potential, 20 < IC50 ≤ 100 -> moderate, IC50 > 100 -> low potential
+                    if ic50 is not None:
+                        try:
+                            ic50_val = float(ic50)
+                        except Exception:
+                            ic50_val = None
+
+                        if ic50_val is not None:
+                            if ic50_val <= 20:
+                                category = "high potential"
+                            elif ic50_val <= 100:
+                                category = "moderate"
+                            else:
+                                category = "low potential"
+                        else:
+                            category = None
+                    else:
+                        category = None
                 else:
                     ic50 = None
                     lelp = None
