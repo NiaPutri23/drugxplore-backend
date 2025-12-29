@@ -232,9 +232,9 @@ class PredictIC50View(APIView):
                             ic50_val = None
 
                         if ic50_val is not None:
-                            if ic50_val <= 20:
+                            if ic50_val >= 6.0:
                                 category = "high potential"
-                            elif ic50_val <= 100:
+                            elif ic50_val >= 5.0:
                                 category = "moderate"
                             else:
                                 category = "low potential"
